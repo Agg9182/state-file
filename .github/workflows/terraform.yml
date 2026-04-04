@@ -1,5 +1,5 @@
 # Auth: ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID (repository secrets). Subscription ID is a workflow input.
-# auth-type SERVICE_PRINCIPAL avoids OIDC; ARM_CLIENT_SECRET must be non-empty or login falls back to federated identity.
+# Uses Azure CLI service-principal login (same pattern as login.yaml), not azure/login action.
 #
 # Bootstrap (no TFSTATE_* secrets yet):
 #   1. terraform init -backend=false → apply (run_apply=true) creates RG + storage account + container + RBAC
@@ -23,7 +23,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write # required by azure/login@v2 to request GitHub’s OIDC token (even with SERVICE_PRINCIPAL + secret)
 
 jobs:
   terraform:
@@ -40,13 +39,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: azure/login@v2
-        with:
-          auth-type: SERVICE_PRINCIPAL
-          client-id: ${{ secrets.ARM_CLIENT_ID }}
-          tenant-id: ${{ secrets.ARM_TENANT_ID }}
-          subscription-id: ${{ inputs.subscription_id }}
-          client-secret: ${{ secrets.ARM_CLIENT_SECRET }}
+      - name: Azure CLI login (service principal)
+        run: |
+          az login --service-principal \
+            -u "$ARM_CLIENT_ID" \
+            -p "$ARM_CLIENT_SECRET" \
+            --tenant "$ARM_TENANT_ID"
+          az account set --subscription "$ARM_SUBSCRIPTION_ID"
 
       - uses: hashicorp/setup-terraform@v3
         with:

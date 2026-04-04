@@ -91,10 +91,13 @@ jobs:
       - name: Terraform validate
         working-directory: infra
         run: terraform validate
-
+      
       - name: Terraform plan
         working-directory: infra
         run: terraform init -reconfigure -input=false
+
+      - name: Terraform plan
+        working-directory: infra
         run: terraform plan -out=tfplan -input=false
 
       - name: Terraform apply

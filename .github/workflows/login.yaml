@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write # required if any step uses azure/login or OIDC; harmless for az CLI-only login
 
 jobs:
   azure-login:

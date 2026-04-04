@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # required by azure/login@v2 to request GitHub’s OIDC token (even with SERVICE_PRINCIPAL + secret)
 
 jobs:
   terraform:

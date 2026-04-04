@@ -57,22 +57,26 @@ jobs:
         run: |
           if [ -z "${TFSTATE_STORAGE_ACCOUNT:-}" ]; then
             echo "bootstrap=true" >> "$GITHUB_OUTPUT"
-            echo "BOOTSTRAP=true" >> "$GITHUB_ENV"
           else
             echo "bootstrap=false" >> "$GITHUB_OUTPUT"
-            echo "BOOTSTRAP=false" >> "$GITHUB_ENV"
           fi
         env:
           TFSTATE_STORAGE_ACCOUNT: ${{ secrets.TFSTATE_STORAGE_ACCOUNT }}
 
       - name: Terraform init
+        working-directory: infra
         run: |
-          set -euo pipefail
-          if [ "${BOOTSTRAP:-}" = "true" ]; then
-            terraform init -backend=false -input=false
+          set -eo pipefail
+          if [ "${{ steps.mode.outputs.bootstrap }}" = "true" ]; then
+            # Skip remote azurerm backend until storage exists; use local state for first apply
+            terraform init -backend=false -reconfigure -input=false
           else
+            if [ -z "${TFSTATE_RESOURCE_GROUP:-}" ] || [ -z "${TFSTATE_STORAGE_ACCOUNT:-}" ] || [ -z "${TFSTATE_CONTAINER:-}" ]; then
+              echo "::error::Remote backend requires secrets TFSTATE_RESOURCE_GROUP, TFSTATE_STORAGE_ACCOUNT, and TFSTATE_CONTAINER. Remove TFSTATE_STORAGE_ACCOUNT to run bootstrap (local state first)."
+              exit 1
+            fi
             KEY="${TFSTATE_KEY:-statefile-learning/terraform.tfstate}"
-            terraform init -input=false \
+            terraform init -reconfigure -input=false \
               -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
               -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
               -backend-config="container_name=${TFSTATE_CONTAINER}" \
@@ -85,17 +89,21 @@ jobs:
           TFSTATE_KEY: ${{ secrets.TFSTATE_KEY }}
 
       - name: Terraform validate
+        working-directory: infra
         run: terraform validate
 
       - name: Terraform plan
+        working-directory: infra
         run: terraform plan -out=tfplan -input=false
 
       - name: Terraform apply
         if: ${{ inputs.run_apply }}
+        working-directory: infra
         run: terraform apply -auto-approve -input=false tfplan
 
       - name: Migrate state to Azure Storage (bootstrap only)
-        if: ${{ env.BOOTSTRAP == 'true' && inputs.run_apply }}
+        if: ${{ steps.mode.outputs.bootstrap == 'true' && inputs.run_apply }}
+        working-directory: infra
         run: |
           set +o pipefail
           yes | terraform init -reconfigure \
@@ -108,7 +116,8 @@ jobs:
           exit "$status"
 
       - name: Bootstrap — add these repository secrets
-        if: ${{ env.BOOTSTRAP == 'true' && inputs.run_apply }}
+        if: ${{ steps.mode.outputs.bootstrap == 'true' && inputs.run_apply }}
+        working-directory: infra
         run: |
           {
             echo "### Remote state is ready"

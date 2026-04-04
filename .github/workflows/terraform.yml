@@ -67,7 +67,8 @@ jobs:
         working-directory: infra
         run: |
           set -eo pipefail
-          if [ "${{ steps.mode.outputs.bootstrap }}" = "true" ]; then
+          # Bootstrap when TFSTATE_STORAGE_ACCOUNT is unset (same rule as Detect step; do not rely only on GITHUB_OUTPUT)
+          if [ -z "${TFSTATE_STORAGE_ACCOUNT:-}" ]; then
             # Skip remote azurerm backend until storage exists; use local state for first apply
             terraform init -backend=false -reconfigure -input=false
           else
@@ -91,10 +92,6 @@ jobs:
       - name: Terraform validate
         working-directory: infra
         run: terraform validate
-      
-      - name: Terraform plan
-        working-directory: infra
-        run: terraform init -reconfigure -input=false
 
       - name: Terraform plan
         working-directory: infra

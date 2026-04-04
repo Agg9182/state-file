@@ -1,7 +1,9 @@
-# Remote state: create a storage account + container in Azure, then set repo secrets:
-#   TFSTATE_RESOURCE_GROUP, TFSTATE_STORAGE_ACCOUNT, TFSTATE_CONTAINER
-# Optional: TFSTATE_KEY (defaults to statefile-learning/terraform.tfstate)
-# Auth (same as AzureLogin): ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID, ARM_SUBSCRIPTION_ID
+# Auth: ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID, ARM_SUBSCRIPTION_ID
+#
+# Bootstrap (no TFSTATE_* secrets yet):
+#   1. terraform init -backend=false → apply (run_apply=true) creates RG + storage account + container + RBAC
+#   2. State migrates to the new blob; workflow summary lists the TFSTATE_* values to add as secrets
+# Steady state (TFSTATE_* secrets set): normal remote init against existing storage
 
 name: Terraform
 
@@ -9,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       run_apply:
-        description: Run terraform apply after plan (false = plan only)
+        description: Run terraform apply after plan (false = plan only). Required true for first bootstrap.
         required: false
         type: boolean
         default: false
@@ -43,14 +45,31 @@ jobs:
         with:
           terraform_version: "1.9.0"
 
-      - name: Terraform init (Azure Storage backend)
+      - name: Detect bootstrap mode
+        id: mode
         run: |
-          KEY="${TFSTATE_KEY:-statefile-learning/terraform.tfstate}"
-          terraform init -input=false \
-            -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
-            -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
-            -backend-config="container_name=${TFSTATE_CONTAINER}" \
-            -backend-config="key=${KEY}"
+          if [ -z "${TFSTATE_STORAGE_ACCOUNT:-}" ]; then
+            echo "bootstrap=true" >> "$GITHUB_OUTPUT"
+            echo "BOOTSTRAP=true" >> "$GITHUB_ENV"
+          else
+            echo "bootstrap=false" >> "$GITHUB_OUTPUT"
+            echo "BOOTSTRAP=false" >> "$GITHUB_ENV"
+          fi
+        env:
+          TFSTATE_STORAGE_ACCOUNT: ${{ secrets.TFSTATE_STORAGE_ACCOUNT }}
+
+      - name: Terraform init
+        run: |
+          if [ "$BOOTSTRAP" = "true" ]; then
+            terraform init -backend=false -input=false
+          else
+            KEY="${TFSTATE_KEY:-statefile-learning/terraform.tfstate}"
+            terraform init -input=false \
+              -backend-config="resource_group_name=${TFSTATE_RESOURCE_GROUP}" \
+              -backend-config="storage_account_name=${TFSTATE_STORAGE_ACCOUNT}" \
+              -backend-config="container_name=${TFSTATE_CONTAINER}" \
+              -backend-config="key=${KEY}"
+          fi
         env:
           TFSTATE_RESOURCE_GROUP: ${{ secrets.TFSTATE_RESOURCE_GROUP }}
           TFSTATE_STORAGE_ACCOUNT: ${{ secrets.TFSTATE_STORAGE_ACCOUNT }}
@@ -66,3 +85,31 @@ jobs:
       - name: Terraform apply
         if: ${{ inputs.run_apply }}
         run: terraform apply -auto-approve -input=false tfplan
+
+      - name: Migrate state to Azure Storage (bootstrap only)
+        if: ${{ env.BOOTSTRAP == 'true' && inputs.run_apply }}
+        run: |
+          set +o pipefail
+          yes | terraform init -reconfigure \
+            -backend-config="resource_group_name=$(terraform output -raw resource_group_name)" \
+            -backend-config="storage_account_name=$(terraform output -raw storage_account_name)" \
+            -backend-config="container_name=$(terraform output -raw container_name)" \
+            -backend-config="key=$(terraform output -raw state_blob_key)"
+          status=$?
+          set -o pipefail
+          exit "$status"
+
+      - name: Bootstrap — add these repository secrets
+        if: ${{ env.BOOTSTRAP == 'true' && inputs.run_apply }}
+        run: |
+          {
+            echo "### Remote state is ready"
+            echo "Add these **Repository secrets** so the next run uses the blob backend (skip bootstrap):"
+            echo ""
+            echo "| Secret | Value |"
+            echo "|--------|-------|"
+            echo "| \`TFSTATE_RESOURCE_GROUP\` | \`$(terraform output -raw resource_group_name)\` |"
+            echo "| \`TFSTATE_STORAGE_ACCOUNT\` | \`$(terraform output -raw storage_account_name)\` |"
+            echo "| \`TFSTATE_CONTAINER\` | \`$(terraform output -raw container_name)\` |"
+            echo "| \`TFSTATE_KEY\` (optional) | \`$(terraform output -raw state_blob_key)\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -50,6 +50,7 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.0"
+          terraform_wrapper: false
 
       - name: Detect bootstrap mode
         id: mode
@@ -66,7 +67,8 @@ jobs:
 
       - name: Terraform init
         run: |
-          if [ "$BOOTSTRAP" = "true" ]; then
+          set -euo pipefail
+          if [ "${BOOTSTRAP:-}" = "true" ]; then
             terraform init -backend=false -input=false
           else
             KEY="${TFSTATE_KEY:-statefile-learning/terraform.tfstate}"

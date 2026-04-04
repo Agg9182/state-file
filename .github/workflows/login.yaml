@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write # required for azure/login OIDC / federated credentials
 
 jobs:
   azure-login:

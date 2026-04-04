@@ -1,4 +1,7 @@
-# Auth: ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID (secrets). Subscription ID is requested when you run the workflow.
+# Auth: Azure managed identity on the runner VM (no client secret).
+# Runner MUST be self-hosted on an Azure VM with system- or user-assigned managed identity.
+# Secrets: ARM_TENANT_ID. Optional: set user_assigned_client_id when using user-assigned MI.
+# https://github.com/Azure/login#login-with-system-assigned-managed-identity
 #
 # Bootstrap (no TFSTATE_* secrets yet):
 #   1. terraform init -backend=false → apply (run_apply=true) creates RG + storage account + container + RBAC
@@ -14,6 +17,10 @@ on:
         description: Azure subscription ID for login and Terraform
         required: true
         type: string
+      user_assigned_client_id:
+        description: Client ID of user-assigned managed identity on the runner VM (leave empty for system-assigned MI)
+        required: false
+        type: string
       run_apply:
         description: Run terraform apply after plan (false = plan only). Required true for first bootstrap.
         required: false
@@ -22,29 +29,28 @@ on:
 
 permissions:
   contents: write
-  id-token: write # required for azure/login OIDC / federated credentials
 
 jobs:
   terraform:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     defaults:
       run:
         working-directory: infra
     env:
-      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-      ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_USE_MSI: "true"
       ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_CLIENT_ID: ${{ inputs.user_assigned_client_id }}
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: azure/login@v2
         with:
-          client-id: ${{ secrets.ARM_CLIENT_ID }}
+          auth-type: IDENTITY
           tenant-id: ${{ secrets.ARM_TENANT_ID }}
           subscription-id: ${{ inputs.subscription_id }}
-          client-secret: ${{ secrets.ARM_CLIENT_SECRET }}
+          client-id: ${{ inputs.user_assigned_client_id }}
 
       - uses: hashicorp/setup-terraform@v3
         with:

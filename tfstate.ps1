@@ -1,4 +1,4 @@
-$RESOURCE_GROUP_NAME='tfstate'
+$RESOURCE_GROUP_NAME='rg-tfstate'
 $STORAGE_ACCOUNT_NAME="tfstate$(Get-Random)"
 $CONTAINER_NAME='tfstate'
 

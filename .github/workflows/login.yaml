@@ -1,3 +1,4 @@
+# Resource group name matches tfstate.ps1 ($RESOURCE_GROUP_NAME = 'tfstate').
 name: AzureLogin
 
 on:
@@ -7,14 +8,20 @@ on:
         description: Azure subscription ID to use after login
         required: true
         type: string
+      aks_cluster_name:
+        description: AKS cluster name in the tfstate resource group
+        required: true
+        type: string
 
 permissions:
   contents: read
-  id-token: write # required if any step uses azure/login or OIDC; harmless for az CLI-only login
+
+env:
+  RESOURCE_GROUP_NAME: tfstate
 
 jobs:
   azure-login:
-    name: Azure login
+    name: Azure login and AKS kubeconfig
     runs-on: ubuntu-latest
     steps:
       - name: Azure CLI login (service principal)
@@ -30,3 +37,17 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
           SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group "$RESOURCE_GROUP_NAME" \
+            --name "$AKS_CLUSTER_NAME" \
+            --overwrite-existing
+          kubectl config current-context
+          kubectl get nodes -o wide
+        env:
+          AKS_CLUSTER_NAME: ${{ inputs.aks_cluster_name }}

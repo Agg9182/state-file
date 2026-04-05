@@ -92,7 +92,7 @@ jobs:
           terraform validate
           terraform plan -input=false -out=tfplan
 
-      - name: Terraform apply (write remote state blob)
+      - name: Terraform apply (persist state to Azure Blob)
         if: ${{ inputs.apply_terraform }}
         env:
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
@@ -103,3 +103,19 @@ jobs:
           set -euo pipefail
           cd "${GITHUB_WORKSPACE}"
           terraform apply -auto-approve -input=false tfplan
+
+      - name: Verify remote state (Azure Blob, not local file)
+        if: ${{ inputs.apply_terraform }}
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}"
+          echo "=== Backend (should be azurerm) ==="
+          terraform version
+          terraform state list
+          echo "=== State snapshot from remote backend (blob) ==="
+          terraform state pull | head -n 20

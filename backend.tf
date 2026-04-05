@@ -6,9 +6,9 @@ terraform {
     }
   }
 
-  # Remote state only: tfstate.ps1 creates the RG, storage account, and container, then writes tfstate.backend.hcl.
-  # Run: terraform init -backend-config=tfstate.backend.hcl
-  # This root module does not create a resource group or storage account.
+  # Remote state in Azure Storage (Blob). After `terraform init -backend-config=tfstate.backend.hcl`,
+  # the state file lives in the storage account created by tfstate.ps1 — not as a local terraform.tfstate.
+  # tfstate.ps1 writes tfstate.backend.hcl (gitignored) with container + blob key + use_azuread_auth.
   backend "azurerm" {}
 }
 

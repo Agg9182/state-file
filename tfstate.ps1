@@ -37,5 +37,6 @@ $backendHcl = Join-Path $repoRoot 'tfstate.backend.hcl'
   "storage_account_name = `"$STORAGE_ACCOUNT_NAME`""
   "container_name       = `"$CONTAINER_NAME`""
   "key                  = `"terraform.tfstate`""
+  "use_azuread_auth     = true"
 ) | Set-Content -Path $backendHcl -Encoding utf8
 Write-Host "Wrote $backendHcl — run: terraform init -backend-config=tfstate.backend.hcl"

@@ -12,6 +12,11 @@ on:
         description: RESOURCE_GROUP_NAME for tfstate storage (script creates the RG if needed)
         required: true
         type: string
+      apply_terraform:
+        description: Run terraform apply after plan (persists remote state in the new storage account)
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -64,4 +69,37 @@ jobs:
           | TFSTATE_CONTAINER | $env:TFSTATE_CONTAINER |
 
           Store **ARM_ACCESS_KEY** from the script run only in a GitHub **secret** if you use storage key auth; it is not written to logs here.
+
+          After this job, Terraform **remote state** is configured: \`terraform init -backend-config=tfstate.backend.hcl\` uses the new storage account (state blob).
           "@ >> $env:GITHUB_STEP_SUMMARY
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+          terraform_wrapper: false
+
+      - name: Terraform init (store state in new storage account)
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}"
+          test -f tfstate.backend.hcl
+          terraform init -input=false -backend-config=tfstate.backend.hcl
+          terraform validate
+          terraform plan -input=false -out=tfplan
+
+      - name: Terraform apply (write remote state blob)
+        if: ${{ inputs.apply_terraform }}
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}"
+          terraform apply -auto-approve -input=false tfplan

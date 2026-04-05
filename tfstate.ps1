@@ -12,6 +12,16 @@ $storageAccount = New-AzStorageAccount -ResourceGroupName $RESOURCE_GROUP_NAME -
 # Create blob container
 New-AzStorageContainer -Name $CONTAINER_NAME -Context $storageAccount.context
 
+# Let the same service principal (ARM_CLIENT_ID) use the data plane for Terraform remote state (Azure AD auth to blob)
+if ($env:ARM_CLIENT_ID) {
+  try {
+    $sp = Get-AzADServicePrincipal -ApplicationId $env:ARM_CLIENT_ID -ErrorAction Stop
+    $null = New-AzRoleAssignment -ObjectId $sp.Id -RoleDefinitionName 'Storage Blob Data Contributor' -Scope $storageAccount.Id -ErrorAction SilentlyContinue
+  } catch {
+    Write-Warning "Could not assign Storage Blob Data Contributor to the SP: $_"
+  }
+}
+
 $ACCOUNT_KEY=(Get-AzStorageAccountKey -ResourceGroupName $RESOURCE_GROUP_NAME -Name $STORAGE_ACCOUNT_NAME)[0].value
 $env:ARM_ACCESS_KEY=$ACCOUNT_KEY
 

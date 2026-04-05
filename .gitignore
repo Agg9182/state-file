@@ -4,3 +4,4 @@ tfstate.backend.hcl
 .terraform/
 *.tfstate
 *.tfstate.*
+tfplan

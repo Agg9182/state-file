@@ -6,8 +6,8 @@ terraform {
     }
   }
 
-  # Values come from tfstate.ps1 → tfstate.backend.hcl (storage_account_name matches $STORAGE_ACCOUNT_NAME there).
-  # Run: terraform init -backend-config=tfstate.backend.hcl
+  # tfstate.ps1 writes tfstate.backend.hcl (gitignored). CI runs: terraform init -backend-config=tfstate.backend.hcl
+  # State file is stored as a blob in the new storage account (see key= in that file).
   backend "azurerm" {}
 }
 

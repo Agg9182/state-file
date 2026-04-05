@@ -1,7 +1,13 @@
 # Auth: ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID (repository secrets). Subscription ID is a workflow input.
 # Uses Azure CLI service-principal login (same pattern as login.yaml), not azure/login action.
 #
-# Bootstrap (no TFSTATE_* secrets yet):
+# Bootstrap vs remote state (detection uses TFSTATE_STORAGE_ACCOUNT only):
+#   • First-time bootstrap: do NOT add the repository secret TFSTATE_STORAGE_ACCOUNT (delete it if it exists).
+#     Unset/absent → empty env → local state + terraform init -backend=false.
+#   • After bootstrap: add ALL TFSTATE_* secrets from the job summary. If TFSTATE_STORAGE_ACCOUNT is set
+#     to any value, the workflow uses the remote azurerm backend path (init -backend-config=...).
+#
+# Bootstrap steps:
 #   1. terraform init -backend=false → apply (run_apply=true) creates RG + storage account + container + RBAC
 #   2. State migrates to the new blob; workflow summary lists the TFSTATE_* values to add as secrets
 # Steady state (TFSTATE_* secrets set): normal remote init against existing storage
@@ -52,6 +58,7 @@ jobs:
           terraform_version: "1.9.0"
           terraform_wrapper: false
 
+      # bootstrap=true only when TFSTATE_STORAGE_ACCOUNT secret is missing; any defined secret → remote init path
       - name: Detect bootstrap mode
         id: mode
         run: |

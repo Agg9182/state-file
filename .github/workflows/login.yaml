@@ -1,32 +1,62 @@
+# Connects to Azure (service principal) and runs tfstate.ps1 to create RG tfstate + storage + container.
 name: AzureLogin
 
 on:
   workflow_dispatch:
     inputs:
       subscription_id:
-        description: Azure subscription ID to use after login
+        description: Azure subscription ID to use
         required: true
         type: string
 
 permissions:
   contents: read
-  id-token: write # required if any step uses azure/login or OIDC; harmless for az CLI-only login
 
 jobs:
   azure-login:
-    name: Azure login
+    name: Azure login and tfstate bootstrap
     runs-on: ubuntu-latest
     steps:
-      - name: Azure CLI login (service principal)
-        run: |
-          az login --service-principal \
-            -u "$ARM_CLIENT_ID" \
-            -p "$ARM_CLIENT_SECRET" \
-            --tenant "$ARM_TENANT_ID"
-          az account set --subscription "$SUBSCRIPTION_ID"
-          az account show --output table
+      - uses: actions/checkout@v4
+
+      - name: Connect to Azure and run tfstate.ps1
+        shell: pwsh
         env:
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
           SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Az.Accounts, Az.Resources, Az.Storage -Scope CurrentUser -Force -AllowClobber
+
+          $secureSecret = ConvertTo-SecureString $env:ARM_CLIENT_SECRET -AsPlainText -Force
+          $cred = [pscredential]::new($env:ARM_CLIENT_ID, $secureSecret)
+          Connect-AzAccount -ServicePrincipal -Credential $cred -Tenant $env:ARM_TENANT_ID | Out-Null
+          Set-AzContext -SubscriptionId $env:SUBSCRIPTION_ID | Out-Null
+          Get-AzContext | Format-List
+
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'tfstate.ps1'
+          if (-not (Test-Path $scriptPath)) { throw "tfstate.ps1 not found at $scriptPath" }
+          & $scriptPath
+
+          # Persist identifiers for optional follow-up steps (do not write storage keys to GITHUB_ENV)
+          "TFSTATE_RESOURCE_GROUP=$($env:TFSTATE_RESOURCE_GROUP)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TFSTATE_STORAGE_ACCOUNT=$($env:TFSTATE_STORAGE_ACCOUNT)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "TFSTATE_CONTAINER=$($env:TFSTATE_CONTAINER)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Summary (no secrets)
+        if: success()
+        shell: pwsh
+        run: |
+          @"
+          ## tfstate.ps1 completed
+          | Name | Value |
+          |------|-------|
+          | TFSTATE_RESOURCE_GROUP | $env:TFSTATE_RESOURCE_GROUP |
+          | TFSTATE_STORAGE_ACCOUNT | $env:TFSTATE_STORAGE_ACCOUNT |
+          | TFSTATE_CONTAINER | $env:TFSTATE_CONTAINER |
+
+          Store **ARM_ACCESS_KEY** from the script run only in a GitHub **secret** if you use storage key auth; it is not written to logs here.
+          "@ >> $env:GITHUB_STEP_SUMMARY

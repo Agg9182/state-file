@@ -1,4 +1,4 @@
-# Connects to Azure (service principal) and runs tfstate.ps1 to create RG tfstate + storage + container.
+# Connects to Azure (service principal) and runs tfstate.ps1 to create RG + storage + container.
 name: AzureLogin
 
 on:
@@ -6,6 +6,10 @@ on:
     inputs:
       subscription_id:
         description: Azure subscription ID to use
+        required: true
+        type: string
+      resource_group_name:
+        description: RESOURCE_GROUP_NAME for tfstate storage (script creates the RG if needed)
         required: true
         type: string
 
@@ -26,6 +30,7 @@ jobs:
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
           SUBSCRIPTION_ID: ${{ inputs.subscription_id }}
+          RESOURCE_GROUP_NAME: ${{ inputs.resource_group_name }}
         run: |
           $ErrorActionPreference = 'Stop'
           Set-PSRepository PSGallery -InstallationPolicy Trusted

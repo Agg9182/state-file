@@ -1,4 +1,5 @@
-$RESOURCE_GROUP_NAME='rg-tfstate'
+# Set RESOURCE_GROUP_NAME in the environment (e.g. GitHub Actions workflow input) or default for local runs.
+$RESOURCE_GROUP_NAME = if ($env:RESOURCE_GROUP_NAME) { $env:RESOURCE_GROUP_NAME } else { 'rg-tfstate' }
 $STORAGE_ACCOUNT_NAME="tfstate$(Get-Random)"
 $CONTAINER_NAME='tfstate'
 

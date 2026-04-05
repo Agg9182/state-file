@@ -2,4 +2,7 @@ provider "azurerm" {
   features {}
 }
 
-data "azurerm_client_config" "current" {}
+resource "azurerm_resource_group" "main" {
+  name     = "${var.project_name}-rg"
+  location = var.location
+}

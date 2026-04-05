@@ -8,6 +8,6 @@ terraform {
     }
   }
 
-  # State blob lives in Azure Storage. Pass -backend-config in CI (see workflow).
-  backend "local" {}
+  # Default: local state (terraform.tfstate in this directory).
+  # Add backend "azurerm" { ... } or partial backend + terraform init -backend-config when using remote state in Azure Storage.
 }

@@ -1,11 +1,11 @@
 variable "location" {
   type        = string
-  description = "Azure region for the state storage resources."
+  description = "Azure region (e.g. eastus, westeurope)."
   default     = "eastus"
 }
 
 variable "project_name" {
   type        = string
-  description = "Short name used in resource group naming (lowercase, no spaces)."
+  description = "Prefix for resource names (letters, numbers, hyphens)."
   default     = "statefile-learning"
 }

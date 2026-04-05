@@ -6,16 +6,12 @@ terraform {
     }
   }
 
-  # tfstate.ps1 writes tfstate.backend.hcl (gitignored). CI runs: terraform init -backend-config=tfstate.backend.hcl
-  # State file is stored as a blob in the new storage account (see key= in that file).
+  # Remote state only: tfstate.ps1 creates the RG, storage account, and container, then writes tfstate.backend.hcl.
+  # Run: terraform init -backend-config=tfstate.backend.hcl
+  # This root module does not create a resource group or storage account.
   backend "azurerm" {}
 }
 
 provider "azurerm" {
   features {}
-}
-
-resource "azurerm_resource_group" "state-demo-secure" {
-  name     = "state-demo"
-  location = "eastus"
 }

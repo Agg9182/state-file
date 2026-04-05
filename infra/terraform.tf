@@ -9,5 +9,5 @@ terraform {
   }
 
   # State blob lives in Azure Storage. Pass -backend-config in CI (see workflow).
-  backend "azurerm" {}
+  backend "local" {}
 }
